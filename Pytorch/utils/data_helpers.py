@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
-"""
-    Useful Functions
-"""
+# -*- coding:utf-8 -*-
+__author__ = 'Randolph'
+
 import os
 import random
 import logging
@@ -48,10 +47,7 @@ def load_model_file(checkpoint_dir):
 
 
 def sort_batch_of_lists(uids, batch_of_lists, lens):
-    """
-    Sort batch of lists according to len(list).
-    Descending
-    """
+    """Sort batch of lists according to len(list). Descending"""
     sorted_idx = [i[0] for i in sorted(enumerate(lens), key=lambda x: x[1], reverse=True)]
     uids = [uids[i] for i in sorted_idx]
     lens = [lens[i] for i in sorted_idx]
@@ -59,17 +55,23 @@ def sort_batch_of_lists(uids, batch_of_lists, lens):
     return uids, batch_of_lists, lens
 
 
-def pad_batch_of_lists(batch_of_lists, max_len):
-    """
-    Pad batch of lists.
-    """
-    padded = [l + [[0]] * (max_len - len(l)) for l in batch_of_lists]
+def pad_batch_of_lists(batch_of_lists, pad_seq):
+    """Pad batch of lists."""
+    padded = [l + [[0]] * (pad_seq - len(l)) for l in batch_of_lists]
     return padded
 
 
 def batch_iter(data, batch_size, pad_len, shuffle=True):
     """
     Turn dataset into iterable batches.
+
+    Args:
+        data: The data
+        batch_size: The size of the data batch
+        pad_len: The padding length
+        shuffle: Shuffle or not (default: True)
+    Returns:
+        A batch iterator for data set
     """
     data_size = len(data)
     num_batches_per_epoch = data_size // batch_size
@@ -96,7 +98,6 @@ def batch_iter(data, batch_size, pad_len, shuffle=True):
         uids, baskets, lens = sort_batch_of_lists(uids, baskets, lens)
         baskets = pad_batch_of_lists(baskets, pad_len)
         yield uids, baskets, lens
-
 
 
 def pool_max(tensor, dim):

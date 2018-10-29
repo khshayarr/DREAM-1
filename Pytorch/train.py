@@ -1,11 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-    train model
-
-    @TODO
-     - Optimizer Choosing
-     - Hyper-parameter tuning
-"""
+# -*- coding:utf-8 -*-
+__author__ = 'Randolph'
 
 import os
 import random

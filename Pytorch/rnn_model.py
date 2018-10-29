@@ -1,4 +1,6 @@
-# -*- coding: utf-8 -*-
+# -*- coding:utf-8 -*-
+__author__ = 'Randolph'
+
 import torch
 from torch.autograd import Variable
 from utils import data_helpers as dh
@@ -6,10 +8,10 @@ from utils import data_helpers as dh
 
 class DRModel(torch.nn.Module):
     """
-       Input Data: b_1, ... b_i ..., b_t
-                   b_i stands for user u's ith basket
-                   b_i = [p_1,..p_j...,p_n]
-                   p_j stands for the  jth product in user u's ith basket
+    Input Data: b_1, ... b_i ..., b_t
+                b_i stands for user u's ith basket
+                b_i = [p_1,..p_j...,p_n]
+                p_j stands for the  jth product in user u's ith basket
     """
 
     def __init__(self, config):
@@ -19,7 +21,7 @@ class DRModel(torch.nn.Module):
         self.config = config
 
         # Layer definitions
-        # Item embedding layer, 商品编码
+        # Item embedding layer, item's index
         self.encode = torch.nn.Embedding(num_embeddings=config.num_product,
                                          embedding_dim=config.embedding_dim,
                                          padding_idx=0)
@@ -47,9 +49,9 @@ class DRModel(torch.nn.Module):
         # Basket Encoding
         # users' basket sequence
         ub_seqs = torch.Tensor(self.config.batch_size, self.config.seq_len, self.config.embedding_dim)
-        for (i, user) in enumerate(x):  # shape of x: [batch_size, time_step, indices of product]
+        for (i, user) in enumerate(x):  # shape of x: [batch_size, seq_len, indices of product]
             embed_baskets = torch.Tensor(self.config.seq_len, self.config.embedding_dim)
-            for (j, basket) in enumerate(user):  # shape of user: [time_step, indices of product]
+            for (j, basket) in enumerate(user):  # shape of user: [seq_len, indices of product]
                 basket = torch.LongTensor(basket).resize_(1, len(basket))
                 basket = self.encode(torch.autograd.Variable(basket))  # shape: [1, len(basket), embedding_dim]
                 basket = self.pool(basket, dim=1)
@@ -58,13 +60,13 @@ class DRModel(torch.nn.Module):
             # Concat current user's all baskets and append it to users' basket sequence
             ub_seqs[i] = embed_baskets  # shape: [batch_size, seq_len, embedding_dim]
 
-        # packed sequence as required by pytorch
+        # Packed sequence as required by pytorch
         packed_ub_seqs = torch.nn.utils.rnn.pack_padded_sequence(ub_seqs, lengths, batch_first=True)
 
         # RNN
         output, h_u = self.rnn(packed_ub_seqs, hidden)
 
-        # shape: [batch_size, pad_len, embedding_dim]
+        # shape: [batch_size, true_len(before padding), embedding_dim]
         dynamic_user, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True)
         return dynamic_user, h_u
 

@@ -1,6 +1,5 @@
-"""
-    Evaluation of DREAM
-"""
+# -*- coding:utf-8 -*-
+__author__ = 'Randolph'
 
 import time
 import random
@@ -21,7 +20,7 @@ logger.info("✔︎ The format of your input is legal, now loading to next step.
 MODEL_DIR = dh.load_model_file(MODEL)
 
 
-def eval():
+def test():
     # Load data
     logger.info("✔︎ Loading data...")
 
@@ -40,7 +39,10 @@ def eval():
     # Load model
     dr_model = torch.load(MODEL_DIR)
 
-    def hit_ratio(K):  # HR@k
+    dr_model.eval()
+
+    def hit_ratio(K):
+
         item_embedding = dr_model.encode.weight
         hidden = dr_model.init_hidden(Config().batch_size)
         avg_ratio = 0
@@ -51,7 +53,7 @@ def eval():
                 du_latest = du[l - 1].unsqueeze(0)
 
                 # calculating <u,p> score for all test items <u,p> pair
-                u_items = test_data[test_data['userID'] == uid].baskets.values[0]  # list  dim 1
+                u_items = test_data[test_data['userID'] == uid].baskets.values[0]  # list dim 1
 
                 index_pos = set(np.arange(len(u_items)))
 
@@ -71,10 +73,10 @@ def eval():
                 avg_ratio = avg_ratio + ratio
         print('Hit ratio', K, avg_ratio/len(users))
 
-    hit_ratio(3)
+    hit_ratio(10)
 
 
 if __name__ == '__main__':
-    eval()
+    test()
 
 

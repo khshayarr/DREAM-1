@@ -1,3 +1,6 @@
+# -*- coding:utf-8 -*-
+__author__ = 'Randolph'
+
 
 class Config(object):
     def __init__(self):
