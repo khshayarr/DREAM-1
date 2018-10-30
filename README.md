@@ -1,4 +1,4 @@
-# Deep Learning
+# Deep Learning for Next Basket Recommendation
 
 This repository contains my implementations of [DREAM](http://www.nlpr.ia.ac.cn/english/irds/People/sw/DREAM.pdf) for next basket prediction.
 
@@ -7,30 +7,10 @@ This repository contains my implementations of [DREAM](http://www.nlpr.ia.ac.cn/
 - Python 3.6
 - Pytorch 0.4 +
 - Tensorflow 1.8 +
+- Pandas 0.23 +
+- scikit-learn 0.19 +
 - Numpy
 - Gensim
-
-## Innovation
-
-### Data part
-1. Make the data support **Chinese** and English.(Which use `jieba` seems easy)
-2. Can use **your own pre-trained word vectors**.(Which use `gensim` seems easy)
-
-### Model part
-1. Deign **two subnetworks** to solve the task --- Text Pairs Similarity Classification.
-2. Add the correct **L2 loss** calculation operation.
-3. Add **gradients clip** operation to prevent gradient explosion.
-4. Add **learning rate decay** with exponential decay.
-5. Add a new **Highway Layer**.(Which is useful according to the model performance)
-6. Add **Batch Normalization Layer**.
-7. Add several performance measures(especially the **AUC**) since the data is imbalanced.
-
-### Code part
-1. Can choose to **train** the model directly or **restore** the model from checkpoint in `train.py`.
-2. Add `test.py`, the **model test code**, it can show the predict value of label of the data in Testset when create the final prediction file.
-3. Add other useful data preprocess functions in `data_helpers.py`.
-4. Use `logging` for helping recording the whole info(including parameters display, model training info, etc.).
-5. Provide the ability to save the best n checkpoints in `checkmate.py`, whereas the `tf.train.Saver` can only save the last n checkpoints.
 
 ## Data
 
@@ -47,6 +27,15 @@ Anyway, it should depends on what your data and task are.
 ## Network Structure
 
 DREAM uses RNN to capture sequential information of users' shopping behavior. It extracts users' dynamic representations and scores user-item pair by calculating inner products between users' dynamic representations and items' embedding.
+
+![](https://ws2.sinaimg.cn/large/006tNbRwgy1fwqh7ulc4jj318t0cqgms.jpg)
+
+The framework of DREAM:
+
+1. Pooling operation on the items in a basket to get the representation of the basket. 
+2. The input layer comprises a series of basket representations of a user. 
+3. Dynamic representation of the user can be obtained in the hidden layer.
+4. Finally the output layer shows scores of this user towards all items.
 
 References:
 
