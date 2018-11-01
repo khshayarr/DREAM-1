@@ -3,6 +3,7 @@ __author__ = 'Randolph'
 
 import time
 import random
+import math
 import pickle
 import torch
 import numpy as np
@@ -30,8 +31,6 @@ def test():
     logger.info("✔︎ Test data processing...")
     test_data = dh.load_data(Config().TESTSET_DIR)
 
-    users = test_data.userID.values
-
     logger.info("✔︎ Load negative sample...")
     with open(Config().NEG_SAMPLES, 'rb') as handle:
         neg_samples = pickle.load(handle)
@@ -41,39 +40,59 @@ def test():
 
     dr_model.eval()
 
-    def hit_ratio(K):
+    item_embedding = dr_model.encode.weight
+    hidden = dr_model.init_hidden(Config().batch_size)
 
-        item_embedding = dr_model.encode.weight
-        hidden = dr_model.init_hidden(Config().batch_size)
-        avg_ratio = 0
-        for i, x in enumerate(dh.batch_iter(train_data, Config().batch_size, Config().seq_len, shuffle=False)):
-            uids, baskets, lens = x
-            dynamic_user, _ = dr_model(baskets, lens, hidden)
-            for uid, l, du in zip(uids, lens, dynamic_user):
-                du_latest = du[l - 1].unsqueeze(0)
+    hitratio_numer = 0
+    hitratio_denom = 0
+    ndcg = 0.0
 
-                # calculating <u,p> score for all test items <u,p> pair
-                u_items = test_data[test_data['userID'] == uid].baskets.values[0]  # list dim 1
+    for i, x in enumerate(dh.batch_iter(train_data, Config().batch_size, Config().seq_len, shuffle=False)):
+        uids, baskets, lens = x
+        dynamic_user, _ = dr_model(baskets, lens, hidden)
+        for uid, l, du in zip(uids, lens, dynamic_user):
+            scores = []
+            du_latest = du[l - 1].unsqueeze(0)
 
-                index_pos = set(np.arange(len(u_items)))
+            # calculating <u,p> score for all test items <u,p> pair
+            positives = test_data[test_data['userID'] == uid].baskets.values[0]  # list dim 1
+            p_length = len(positives)
+            positives = torch.LongTensor(positives)
 
-                neg_items = random.sample(list(neg_samples[uid]), 1000)
-                u_items.extend(neg_items)
+            # Deal with positives samples
+            scores_pos = list(torch.mm(du_latest, item_embedding[positives].t()).data.numpy()[0])
+            for s in scores_pos:
+                scores.append(s)
 
-                u_items = torch.LongTensor(u_items)
+            # Deal with negative samples
+            negtives = random.sample(list(neg_samples[uid]), Config().neg_num)
+            negtives = torch.LongTensor(negtives)
+            scores_neg = list(torch.mm(du_latest, item_embedding[negtives].t()).data.numpy()[0])
+            for s in scores_neg:
+                scores.append(s)
 
-                score_ui = torch.mm(du_latest, item_embedding[u_items].t())
-                score_ui = list(score_ui.data.numpy()[0])
-                index_k = []
-                for k in range(K):
-                    index = score_ui.index(max(score_ui))
-                    index_k.append(index)
-                    score_ui[index] = -99999
-                ratio = len((index_pos & set(index_k)))/K
-                avg_ratio = avg_ratio + ratio
-        print('Hit ratio', K, avg_ratio/len(users))
+            # Calculate hit-ratio
+            index_k = []
+            for k in range(Config().top_k):
+                index = scores.index(max(scores))
+                index_k.append(index)
+                scores[index] = -9999
+            hitratio_numer += len((set(np.arange(0, p_length)) & set(index_k)))
+            hitratio_denom += p_length
 
-    hit_ratio(10)
+            # Calculate NDCG
+            u_dcg = 0
+            u_idcg = 0
+            for k in range(Config().top_k):
+                if index_k[k] < p_length:  # 长度 p_length 内的为正样本
+                    u_dcg += 1 / math.log(k, 2)
+                u_idcg += 1 / math.log(k, 2)
+            ndcg += u_dcg / u_idcg
+
+    hitratio = hitratio_numer / hitratio_denom
+    ndcg = ndcg / len(train_data)
+    print('Hit ratio[{0}]: {1}'.format(Config().top_k, hitratio))
+    print('NDCG[{0}]: {1}'.format(Config().top_k, ndcg))
 
 
 if __name__ == '__main__':

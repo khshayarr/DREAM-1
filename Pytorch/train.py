@@ -2,6 +2,7 @@
 __author__ = 'Randolph'
 
 import os
+import math
 import random
 import time
 import pickle
@@ -15,6 +16,12 @@ from rnn_model import DRModel
 
 logger = dh.logger_fn("torch-log", "logs/training-{0}.log".format(time.asctime()))
 
+dilim = '-' * 120
+logger.info(dilim)
+for attr in sorted(Config().__dict__):
+    logger.info('{:>50}|{:<50}'.format(attr.upper(), Config().__dict__[attr]))
+logger.info(dilim)
+
 
 def train():
     # Load data
@@ -25,6 +32,9 @@ def train():
 
     logger.info("✔︎ Validation data processing...")
     validation_data = dh.load_data(Config().VALIDATIONSET_DIR)
+
+    logger.info("✔︎ Test data processing...")
+    test_data = dh.load_data(Config().TESTSET_DIR)
 
     logger.info("✔︎ Load negative sample...")
     with open(Config().NEG_SAMPLES, 'rb') as handle:
@@ -123,13 +133,72 @@ def train():
                     .format(epoch, elapsed, val_loss))
         return val_loss
 
+    def test_model():
+        dr_model.eval()
+        item_embedding = dr_model.encode.weight
+        dr_hidden = dr_model.init_hidden(Config().batch_size)
+
+        hitratio_numer = 0
+        hitratio_denom = 0
+        ndcg = 0.0
+
+        for i, x in enumerate(dh.batch_iter(train_data, Config().batch_size, Config().seq_len, shuffle=False)):
+            uids, baskets, lens = x
+            dynamic_user, _ = dr_model(baskets, lens, dr_hidden)
+            for uid, l, du in zip(uids, lens, dynamic_user):
+                scores = []
+                du_latest = du[l - 1].unsqueeze(0)
+
+                # calculating <u,p> score for all test items <u,p> pair
+                positives = test_data[test_data['userID'] == uid].baskets.values[0]  # list dim 1
+                p_length = len(positives)
+                positives = torch.LongTensor(positives)
+
+                # Deal with positives samples
+                scores_pos = list(torch.mm(du_latest, item_embedding[positives].t()).data.numpy()[0])
+                for s in scores_pos:
+                    scores.append(s)
+
+                # Deal with negative samples
+                negtives = random.sample(list(neg_samples[uid]), Config().neg_num)
+                negtives = torch.LongTensor(negtives)
+                scores_neg = list(torch.mm(du_latest, item_embedding[negtives].t()).data.numpy()[0])
+                for s in scores_neg:
+                    scores.append(s)
+
+                # Calculate hit-ratio
+                index_k = []
+                for k in range(Config().top_k):
+                    index = scores.index(max(scores))
+                    index_k.append(index)
+                    scores[index] = -9999
+                hitratio_numer += len((set(np.arange(0, p_length)) & set(index_k)))
+                hitratio_denom += p_length
+
+                # Calculate NDCG
+                u_dcg = 0
+                u_idcg = 0
+                for k in range(Config().top_k):
+                    if index_k[k] < p_length:  # 长度 p_length 内的为正样本
+                        u_dcg += 1 / math.log(k, 2)
+                    u_idcg += 1 / math.log(k, 2)
+                ndcg += u_dcg / u_idcg
+
+        hit_ratio = hitratio_numer / hitratio_denom
+        ndcg = ndcg / len(train_data)
+        logger.info('[Test]| Epochs {:3d} | Hit ratio {:02.2f} | NDCG {:05.2f} |'
+                    .format(epoch, hit_ratio, ndcg))
+        return hit_ratio, ndcg
+
     timestamp = str(int(time.time()))
     out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
-    checkpoint_dir = out_dir + '/model-{epoch:02d}-{loss:.4f}.model'
+    logger.info('Save into {0}'.format(out_dir))
+    checkpoint_dir = out_dir + '/model-{epoch:02d}-{hitratio:.4f}.model'
 
     best_val_loss = None
+    best_hit_ratio = None
 
     try:
         # Training
@@ -140,11 +209,19 @@ def train():
             val_loss = validate_model()
             logger.info('-' * 89)
 
+            hit_ratio, ndcg = test_model()
+            logger.info('-' * 89)
+
             # Checkpoint
-            if not best_val_loss or val_loss < best_val_loss:
-                with open(checkpoint_dir.format(epoch=epoch, loss=val_loss), 'wb') as f:
+            if not best_hit_ratio or hit_ratio > best_hit_ratio:
+                with open(checkpoint_dir.format(epoch=epoch, hitratio=hit_ratio), 'wb') as f:
                     torch.save(dr_model, f)
-                best_val_loss = val_loss
+                best_hit_ratio = hit_ratio
+
+            # if not best_val_loss or val_loss < best_val_loss:
+            #     with open(checkpoint_dir.format(epoch=epoch, loss=val_loss), 'wb') as f:
+            #         torch.save(dr_model, f)
+            #     best_val_loss = val_loss
             else:
                 # Manual SGD slow down lr if no improvement in val_loss
                 adjust_learning_rate(optimizer)
