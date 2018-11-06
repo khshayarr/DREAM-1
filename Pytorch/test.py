@@ -85,8 +85,8 @@ def test():
             u_idcg = 0
             for k in range(Config().top_k):
                 if index_k[k] < p_length:  # 长度 p_length 内的为正样本
-                    u_dcg += 1 / math.log(k, 2)
-                u_idcg += 1 / math.log(k, 2)
+                    u_dcg += 1 / math.log(k + 1 + 1, 2)
+                u_idcg += 1 / math.log(k + 1 + 1, 2)
             ndcg += u_dcg / u_idcg
 
     hitratio = hitratio_numer / hitratio_denom

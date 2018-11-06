@@ -180,8 +180,8 @@ def train():
                 u_idcg = 0
                 for k in range(Config().top_k):
                     if index_k[k] < p_length:  # 长度 p_length 内的为正样本
-                        u_dcg += 1 / math.log(k, 2)
-                    u_idcg += 1 / math.log(k, 2)
+                        u_dcg += 1 / math.log(k + 1 + 1, 2)
+                    u_idcg += 1 / math.log(k + 1 + 1, 2)
                 ndcg += u_dcg / u_idcg
 
         hit_ratio = hitratio_numer / hitratio_denom
@@ -195,7 +195,7 @@ def train():
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     logger.info('Save into {0}'.format(out_dir))
-    checkpoint_dir = out_dir + '/model-{epoch:02d}-{hitratio:.4f}.model'
+    checkpoint_dir = out_dir + '/model-{epoch:02d}-{hitratio:.4f}-{ndcg:.4f}.model'
 
     best_val_loss = None
     best_hit_ratio = None
@@ -214,7 +214,7 @@ def train():
 
             # Checkpoint
             if not best_hit_ratio or hit_ratio > best_hit_ratio:
-                with open(checkpoint_dir.format(epoch=epoch, hitratio=hit_ratio), 'wb') as f:
+                with open(checkpoint_dir.format(epoch=epoch, hitratio=hit_ratio, ndcg=ndcg), 'wb') as f:
                     torch.save(dr_model, f)
                 best_hit_ratio = hit_ratio
 
