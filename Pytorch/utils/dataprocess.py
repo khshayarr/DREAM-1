@@ -50,10 +50,6 @@ def split_data(input_file):
     test_set.to_json('../data/test.json', orient='records', lines=True)
     valid_set.to_json('../data/validation.json', orient='records', lines=True)
 
-    train_set.to_csv('../data/train.csv', sep='\t', columns=['userID', 'baskets', 'num_baskets'], encoding='utf-8')
-    test_set.to_csv('../data/test.csv', sep='\t', columns=['userID', 'baskets'], encoding='utf-8')
-    valid_set.to_csv('../data/validation.csv', sep='\t', columns=['userID', 'baskets', 'num_baskets'], encoding='utf-8')
-
     return train_set, test_set, valid_set
 
 

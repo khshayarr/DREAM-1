@@ -55,9 +55,9 @@ def sort_batch_of_lists(uids, batch_of_lists, lens):
     return uids, batch_of_lists, lens
 
 
-def pad_batch_of_lists(batch_of_lists, pad_seq):
+def pad_batch_of_lists(batch_of_lists, pad_len):
     """Pad batch of lists."""
-    padded = [l + [[0]] * (pad_seq - len(l)) for l in batch_of_lists]
+    padded = [l + [[0]] * (pad_len - len(l)) for l in batch_of_lists]
     return padded
 
 
@@ -92,9 +92,9 @@ def batch_iter(data, batch_size, pad_len, shuffle=True):
         # 将最后一个不满 batch_size 的 batch 进行随机补齐
         residual = [i for i in range(num_batches_per_epoch * batch_size, data_size)] + list(
             np.random.choice(data_size, batch_size - data_size % batch_size))
-        uids = data.iloc[residual].userID.values
-        baskets = list(data.iloc[residual].baskets.values)
-        lens = data.iloc[residual].num_baskets.values
+        uids = shuffled_data.iloc[residual].userID.values
+        baskets = list(shuffled_data.iloc[residual].baskets.values)
+        lens = shuffled_data.iloc[residual].num_baskets.values
         uids, baskets, lens = sort_batch_of_lists(uids, baskets, lens)
         baskets = pad_batch_of_lists(baskets, pad_len)
         yield uids, baskets, lens

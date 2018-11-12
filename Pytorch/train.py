@@ -41,16 +41,10 @@ def train():
         neg_samples = pickle.load(handle)
 
     # Model config
-    dr_model = DRModel(Config())
+    model = DRModel(Config())
 
     # Optimizer
-    optimizer = torch.optim.Adam(dr_model.parameters(), lr=Config().learning_rate)
-
-    def adjust_learning_rate(optimizer):
-        """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-        lr = Config().learning_rate * 0.5
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = lr
+    optimizer = torch.optim.Adam(model.parameters(), lr=Config().learning_rate)
 
     def bpr_loss(uids, baskets, dynamic_user, item_embedding):
         """
@@ -62,10 +56,10 @@ def train():
             dynamic_user: batch of users' dynamic representations
             item_embedding: item_embedding matrix
         """
-        nll = 0
+        loss = 0
         for uid, bks, du in zip(uids, baskets, dynamic_user):
             du_p_product = torch.mm(du, item_embedding.t())  # shape: [pad_len, num_item]
-            nll_u = []  # nll for user
+            loss_u = []  # loss for user
             for t, basket_t in enumerate(bks):
                 if basket_t[0] != 0 and t != 0:
                     pos_idx = torch.LongTensor(basket_t)
@@ -78,28 +72,28 @@ def train():
                     score = du_p_product[t - 1][pos_idx] - du_p_product[t - 1][neg_idx]
 
                     # Average Negative log likelihood for basket_t
-                    nll_u.append(torch.mean(-torch.nn.LogSigmoid()(score)))
-            for i in nll_u:
-                nll = nll + i / len(nll_u)
-        avg_nll = torch.div(nll, len(baskets))
-        return avg_nll
+                    loss_u.append(torch.mean(-torch.nn.LogSigmoid()(score)))
+            for i in loss_u:
+                loss = loss + i / len(loss_u)
+        avg_loss = torch.div(loss, len(baskets))
+        return avg_loss
 
     def train_model():
-        dr_model.train()  # turn on training mode for dropout
-        dr_hidden = dr_model.init_hidden(Config().batch_size)
+        model.train()  # turn on training mode for dropout
+        dr_hidden = model.init_hidden(Config().batch_size)
         train_loss = 0
         start_time = time.clock()
         num_batches = ceil(len(train_data) / Config().batch_size)
         for i, x in enumerate(dh.batch_iter(train_data, Config().batch_size, Config().seq_len, shuffle=True)):
             uids, baskets, lens = x
-            dr_model.zero_grad()  # 如果不置零，Variable 的梯度在每次 backward 的时候都会累加
-            dynamic_user, _ = dr_model(baskets, lens, dr_hidden)
+            model.zero_grad()  # 如果不置零，Variable 的梯度在每次 backward 的时候都会累加
+            dynamic_user, _ = model(baskets, lens, dr_hidden)
 
-            loss = bpr_loss(uids, baskets, dynamic_user, dr_model.encode.weight)
+            loss = bpr_loss(uids, baskets, dynamic_user, model.encode.weight)
             loss.backward()
 
             # Clip to avoid gradient exploding
-            torch.nn.utils.clip_grad_norm_(dr_model.parameters(), Config().clip)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), Config().clip)
 
             # Parameter updating
             optimizer.step()
@@ -111,32 +105,32 @@ def train():
                 cur_loss = train_loss.item() / Config().log_interval  # turn tensor into float
                 train_loss = 0
                 start_time = time.clock()
-                logger.info('[Training]| Epochs {:3d} | Batch {:5d} / {:5d} | ms/batch {:02.2f} | Loss {:05.2f} |'
+                logger.info('[Training]| Epochs {:3d} | Batch {:5d} / {:5d} | ms/batch {:02.2f} | Loss {:05.4f} |'
                             .format(epoch, i, num_batches, elapsed, cur_loss))
 
     def validate_model():
-        dr_model.eval()
-        dr_hidden = dr_model.init_hidden(Config().batch_size)
+        model.eval()
+        dr_hidden = model.init_hidden(Config().batch_size)
         val_loss = 0
         start_time = time.clock()
         num_batches = ceil(len(validation_data) / Config().batch_size)
         for i, x in enumerate(dh.batch_iter(validation_data, Config().batch_size, Config().seq_len, shuffle=False)):
             uids, baskets, lens = x
-            dynamic_user, _ = dr_model(baskets, lens, dr_hidden)
-            loss = bpr_loss(uids, baskets, dynamic_user, dr_model.encode.weight)
+            dynamic_user, _ = model(baskets, lens, dr_hidden)
+            loss = bpr_loss(uids, baskets, dynamic_user, model.encode.weight)
             val_loss += loss.data
 
         # Logging
         elapsed = (time.clock() - start_time) * 1000 / num_batches
         val_loss = val_loss.item() / num_batches
-        logger.info('[Validation]| Epochs {:3d} | Elapsed {:02.2f} | Loss {:05.2f} |'
+        logger.info('[Validation]| Epochs {:3d} | Elapsed {:02.2f} | Loss {:05.4f} |'
                     .format(epoch, elapsed, val_loss))
         return val_loss
 
     def test_model():
-        dr_model.eval()
-        item_embedding = dr_model.encode.weight
-        dr_hidden = dr_model.init_hidden(Config().batch_size)
+        model.eval()
+        item_embedding = model.encode.weight
+        dr_hidden = model.init_hidden(Config().batch_size)
 
         hitratio_numer = 0
         hitratio_denom = 0
@@ -144,7 +138,7 @@ def train():
 
         for i, x in enumerate(dh.batch_iter(train_data, Config().batch_size, Config().seq_len, shuffle=False)):
             uids, baskets, lens = x
-            dynamic_user, _ = dr_model(baskets, lens, dr_hidden)
+            dynamic_user, _ = model(baskets, lens, dr_hidden)
             for uid, l, du in zip(uids, lens, dynamic_user):
                 scores = []
                 du_latest = du[l - 1].unsqueeze(0)
@@ -186,7 +180,7 @@ def train():
 
         hit_ratio = hitratio_numer / hitratio_denom
         ndcg = ndcg / len(train_data)
-        logger.info('[Test]| Epochs {:3d} | Hit ratio {:02.2f} | NDCG {:05.2f} |'
+        logger.info('[Test]| Epochs {:3d} | Hit ratio {:02.4f} | NDCG {:05.4f} |'
                     .format(epoch, hit_ratio, ndcg))
         return hit_ratio, ndcg
 
@@ -197,7 +191,6 @@ def train():
     logger.info('Save into {0}'.format(out_dir))
     checkpoint_dir = out_dir + '/model-{epoch:02d}-{hitratio:.4f}-{ndcg:.4f}.model'
 
-    best_val_loss = None
     best_hit_ratio = None
 
     try:
@@ -215,17 +208,8 @@ def train():
             # Checkpoint
             if not best_hit_ratio or hit_ratio > best_hit_ratio:
                 with open(checkpoint_dir.format(epoch=epoch, hitratio=hit_ratio, ndcg=ndcg), 'wb') as f:
-                    torch.save(dr_model, f)
+                    torch.save(model, f)
                 best_hit_ratio = hit_ratio
-
-            # if not best_val_loss or val_loss < best_val_loss:
-            #     with open(checkpoint_dir.format(epoch=epoch, loss=val_loss), 'wb') as f:
-            #         torch.save(dr_model, f)
-            #     best_val_loss = val_loss
-            else:
-                # Manual SGD slow down lr if no improvement in val_loss
-                adjust_learning_rate(optimizer)
-                pass
     except KeyboardInterrupt:
         logger.info('*' * 89)
         logger.info('Early Stopping!')
