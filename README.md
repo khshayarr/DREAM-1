@@ -41,15 +41,3 @@ References:
 
 > Yu, Feng, et al. "A dynamic recurrent model for next basket recommendation." Proceedings of the 39th International ACM SIGIR conference on Research and Development in Information Retrieval. ACM, 2016.
 
-
-## About Me
-
-黄威，Randolph
-
-SCU SE Bachelor; USTC CS Master
-
-Email: chinawolfman@hotmail.com
-
-My Blog: [randolph.pro](http://randolph.pro)
-
-LinkedIn: [randolph's linkedin](https://www.linkedin.com/in/randolph-%E9%BB%84%E5%A8%81/)
